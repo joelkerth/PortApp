@@ -107,13 +107,21 @@ class StatusBarController {
             let row = PortMenuItemView(info: info)
             row.onOpen = { [weak self] in self?.openPort(info.port) }
             row.onKill = { [weak self] in self?.killPort(info) }
-            row.onFavorite = { [weak self] in
+            row.onFavorite = { [weak self, weak row] in
                 PortPreferences.toggleFavorite(info)
-                self?.rebuildMenu()
+                row?.refreshPreferenceState(
+                    isFavorite: PortPreferences.isFavorite(info),
+                    isIgnored: PortPreferences.isIgnored(info)
+                )
+                self?.applyCurrentFilter()
             }
-            row.onIgnore = { [weak self] in
+            row.onIgnore = { [weak self, weak row] in
                 PortPreferences.toggleIgnored(info)
-                self?.rebuildMenu()
+                row?.refreshPreferenceState(
+                    isFavorite: PortPreferences.isFavorite(info),
+                    isIgnored: PortPreferences.isIgnored(info)
+                )
+                self?.applyCurrentFilter()
             }
             item.view = row
             rowItems.append((item, info))

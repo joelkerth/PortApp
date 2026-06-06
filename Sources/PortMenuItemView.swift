@@ -106,6 +106,14 @@ final class PortMenuItemView: NSView {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    func refreshPreferenceState(isFavorite: Bool, isIgnored: Bool) {
+        favoriteBtn.image = Self.iconImage(symbol: isFavorite ? "star.fill" : "star")
+        favoriteBtn.contentTintColor = isFavorite ? .systemYellow : .secondaryLabelColor
+
+        ignoreBtn.image = Self.iconImage(symbol: isIgnored ? "eye" : "eye.slash")
+        ignoreBtn.contentTintColor = isIgnored ? .systemBlue : .secondaryLabelColor
+    }
+
     // MARK: – Hover highlight
 
     override func mouseEntered(with event: NSEvent) {
@@ -127,13 +135,17 @@ final class PortMenuItemView: NSView {
 
     private static func iconButton(symbol: String, tint: NSColor) -> NSButton {
         let btn = NSButton()
-        let cfg = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
-        btn.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
-            .withSymbolConfiguration(cfg)
+        btn.image = iconImage(symbol: symbol)
         btn.contentTintColor = tint
         btn.isBordered = false
         btn.bezelStyle = .inline
         btn.translatesAutoresizingMaskIntoConstraints = false
         return btn
+    }
+
+    private static func iconImage(symbol: String) -> NSImage? {
+        let cfg = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        return NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(cfg)
     }
 }
