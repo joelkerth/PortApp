@@ -7,9 +7,16 @@ PortMonitor es una app ligera para macOS que vive en la barra de menu y muestra,
 - Muestra un icono permanente en la barra de menu de macOS.
 - Escanea puertos TCP en estado `LISTEN` usando `lsof`.
 - Lista los puertos activos con el nombre del proceso asociado.
+- Muestra la ruta del ejecutable o el comando completo del proceso.
+- Muestra cuanto tiempo lleva activo el proceso.
+- Detecta frameworks y herramientas comunes como Next.js, Vite, Rails, Docker, Django, Flask, Laravel, Astro, Nuxt y Node/Express.
 - Ordena los resultados por numero de puerto.
 - Deduplica entradas IPv4/IPv6 para que un mismo puerto no aparezca repetido.
 - Filtra puertos efimeros y procesos de sistema comunes para mantener la lista enfocada en servidores locales utiles.
+- Incluye busqueda por puerto, PID, proceso, ruta, comando o framework.
+- Permite filtrar por puertos activos, favoritos o ignorados.
+- Permite marcar procesos como favoritos.
+- Permite ignorar procesos para ocultarlos de la vista activa.
 - Actualiza el indicador de la barra de menu cada 5 segundos.
 - Muestra un punto verde en el icono cuando hay puertos activos.
 - Refresca la lista al abrir el menu y tambien desde el boton de refrescar.
@@ -21,6 +28,7 @@ PortMonitor es una app ligera para macOS que vive en la barra de menu y muestra,
 - Funciona como app accesoria: no ocupa espacio en el Dock.
 - Incluye generador de icono `.icns` basado en SF Symbols.
 - Incluye script de compilacion e instalacion para macOS.
+- Incluye script de empaquetado y workflow de GitHub Actions para publicar releases descargables.
 
 ## Uso
 
@@ -30,8 +38,19 @@ Al abrir el menu se muestra la lista de puertos detectados. Cada fila incluye:
 
 - Numero de puerto.
 - Nombre del proceso.
+- Framework o herramienta detectada, cuando aplica.
+- Ruta del ejecutable o comando completo.
+- Tiempo activo del proceso.
+- Boton para marcar o desmarcar como favorito.
+- Boton para ignorar o dejar de ignorar el proceso.
 - Boton para abrir el puerto en el navegador.
 - Boton para finalizar el proceso.
+
+La parte superior del menu incluye una busqueda y un selector de filtro:
+
+- **Activos**: muestra procesos visibles, excluyendo ignorados.
+- **Favoritos**: muestra procesos activos marcados como favoritos.
+- **Ignorados**: muestra procesos activos ocultos de la vista principal para poder restaurarlos.
 
 En la parte inferior del menu hay accesos para:
 
@@ -71,6 +90,29 @@ Luego se puede abrir con:
 open /Applications/PortMonitor.app
 ```
 
+## Crear un paquete descargable
+
+Para generar un ZIP local con `PortMonitor.app`:
+
+```sh
+bash package_release.sh v1.0.0
+```
+
+El archivo queda en `dist/PortMonitor-v1.0.0-macOS.zip`.
+
+## Publicar un release en GitHub
+
+El repo incluye un workflow de GitHub Actions que crea un release automaticamente cuando se sube un tag que empieza por `v`.
+
+Ejemplo:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions compila la app en macOS, genera el ZIP y lo adjunta al release.
+
 ## Generar el icono
 
 Si necesitas regenerar `AppIcon.icns`:
@@ -89,6 +131,8 @@ Sources/
   LoginItemManager.swift
   MenuFooterView.swift
   PortMenuItemView.swift
+  PortFilterHeaderView.swift
+  PortPreferences.swift
   PortScanner.swift
   SettingsWindowController.swift
   StatusBarController.swift
@@ -98,6 +142,8 @@ AppIcon.icns
 Info.plist
 build.sh
 make_icon.sh
+package_release.sh
+.github/workflows/release.yml
 ```
 
 ## Notas

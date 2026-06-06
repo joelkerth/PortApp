@@ -6,6 +6,8 @@ class StatusBarController {
     private var refreshTimer: Timer?
     private var menuDelegate: MenuDelegate?          // strong ref — NSMenu.delegate is weak
     private let settings = SettingsWindowController()
+    private var searchText = ""
+    private var filter: PortFilter = .active
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -27,7 +29,7 @@ class StatusBarController {
 
     private func refreshBadge() {
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let hasPorts = !PortScanner.scan().isEmpty
+            let hasPorts = !PortScanner.scan().filter { !PortPreferences.isIgnored($0) }.isEmpty
             DispatchQueue.main.async {
                 self?.statusItem.button?.image = Self.makeStatusIcon(hasPorts: hasPorts)
             }
@@ -62,25 +64,48 @@ class StatusBarController {
         menu.removeAllItems()
 
         let ports = PortScanner.scan()
+        let visiblePorts = filtered(ports)
 
         // Update badge inline so it's instant when the menu opens
-        statusItem.button?.image = Self.makeStatusIcon(hasPorts: !ports.isEmpty)
+        statusItem.button?.image = Self.makeStatusIcon(hasPorts: ports.contains { !PortPreferences.isIgnored($0) })
 
-        if ports.isEmpty {
-            let empty = NSMenuItem(title: "No hay puertos activos", action: nil, keyEquivalent: "")
+        let headerItem = NSMenuItem()
+        let headerView = PortFilterHeaderView(searchText: searchText, filter: filter)
+        headerView.onSearch = { [weak self] text in
+            self?.searchText = text
+            self?.rebuildMenu()
+        }
+        headerView.onFilter = { [weak self] filter in
+            self?.filter = filter
+            self?.rebuildMenu()
+        }
+        headerItem.view = headerView
+        menu.addItem(headerItem)
+
+        if visiblePorts.isEmpty {
+            let title = ports.isEmpty ? "No hay puertos activos" : "No hay resultados para este filtro"
+            let empty = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
         } else {
-            let header = NSMenuItem(title: "Puertos activos  (\(ports.count))", action: nil, keyEquivalent: "")
+            let header = NSMenuItem(title: headerTitle(total: ports.count, visible: visiblePorts.count), action: nil, keyEquivalent: "")
             header.isEnabled = false
             menu.addItem(header)
             menu.addItem(.separator())
 
-            for info in ports {
+            for info in visiblePorts {
                 let item = NSMenuItem()
                 let row = PortMenuItemView(info: info)
                 row.onOpen = { [weak self] in self?.openPort(info.port) }
                 row.onKill = { [weak self] in self?.killPort(info) }
+                row.onFavorite = { [weak self] in
+                    PortPreferences.toggleFavorite(info)
+                    self?.rebuildMenu()
+                }
+                row.onIgnore = { [weak self] in
+                    PortPreferences.toggleIgnored(info)
+                    self?.rebuildMenu()
+                }
                 item.view = row
                 menu.addItem(item)
             }
@@ -114,6 +139,32 @@ class StatusBarController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.rebuildMenu()
         }
+    }
+
+    private func filtered(_ ports: [PortInfo]) -> [PortInfo] {
+        let base: [PortInfo]
+        switch filter {
+        case .active:
+            base = ports.filter { !PortPreferences.isIgnored($0) }
+        case .favorites:
+            base = ports.filter { PortPreferences.isFavorite($0) && !PortPreferences.isIgnored($0) }
+        case .ignored:
+            base = ports.filter { PortPreferences.isIgnored($0) }
+        }
+
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return base }
+        return base.filter { $0.searchableText.contains(query) }
+    }
+
+    private func headerTitle(total: Int, visible: Int) -> String {
+        let label: String
+        switch filter {
+        case .active: label = "Puertos activos"
+        case .favorites: label = "Favoritos activos"
+        case .ignored: label = "Ignorados activos"
+        }
+        return "\(label)  (\(visible)/\(total))"
     }
 }
 

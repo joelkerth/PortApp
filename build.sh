@@ -38,6 +38,12 @@ else
     echo "  (sin AppIcon.icns — ejecuta: bash make_icon.sh)"
 fi
 
+if [ "${SKIP_INSTALL:-0}" = "1" ]; then
+    echo ""
+    echo "✓ App construida en $APP_BUNDLE"
+    exit 0
+fi
+
 echo "▸ Instalando en /Applications..."
 pkill "$APP_NAME" 2>/dev/null; sleep 0.2
 cp -r "$APP_BUNDLE" /Applications/

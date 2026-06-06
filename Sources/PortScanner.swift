@@ -5,6 +5,26 @@ struct PortInfo: Identifiable {
     let port: Int
     let pid: Int
     let processName: String
+    let command: String
+    let executablePath: String
+    let elapsed: String
+    let framework: String?
+
+    var identity: String {
+        executablePath.isEmpty ? processName : executablePath
+    }
+
+    var searchableText: String {
+        [
+            String(port),
+            String(pid),
+            processName,
+            command,
+            executablePath,
+            elapsed,
+            framework ?? "",
+        ].joined(separator: " ").lowercased()
+    }
 }
 
 enum PortScanner {
@@ -67,7 +87,25 @@ enum PortScanner {
             guard !seenPorts.contains(port) else { continue }
             seenPorts.insert(port)
 
-            ports.append(PortInfo(port: port, pid: pid, processName: processName))
+            let command = processInfo(pid: pid, field: "command")
+            let executablePath = processInfo(pid: pid, field: "comm")
+            let elapsed = processInfo(pid: pid, field: "etime")
+            let info = PortInfo(
+                port: port,
+                pid: pid,
+                processName: processName,
+                command: command,
+                executablePath: executablePath,
+                elapsed: elapsed,
+                framework: FrameworkDetector.detect(
+                    port: port,
+                    processName: processName,
+                    command: command,
+                    executablePath: executablePath
+                )
+            )
+
+            ports.append(info)
         }
 
         return ports.sorted { $0.port < $1.port }
@@ -100,5 +138,56 @@ enum PortScanner {
         } catch {
             return false
         }
+    }
+
+    private static func processInfo(pid: Int, field: String) -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-p", String(pid), "-o", "\(field)="]
+
+        let outPipe = Pipe()
+        process.standardOutput = outPipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return ""
+        }
+
+        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+}
+
+enum FrameworkDetector {
+    static func detect(port: Int, processName: String, command: String, executablePath: String) -> String? {
+        let haystack = "\(processName) \(command) \(executablePath)".lowercased()
+
+        let checks: [(String, [String], [Int])] = [
+            ("Next.js", ["next dev", "next start", "/next/dist/", "node_modules/.bin/next"], [3000]),
+            ("Vite", ["vite", "node_modules/.bin/vite"], [5173, 4173]),
+            ("Rails", ["rails server", "bin/rails", "puma", "passenger"], [3000]),
+            ("Docker", ["docker", "com.docker", "docker-proxy"], []),
+            ("Django", ["manage.py runserver", "django"], [8000]),
+            ("Flask", ["flask run", "werkzeug"], [5000]),
+            ("Laravel", ["artisan serve"], [8000]),
+            ("Astro", ["astro dev", "node_modules/.bin/astro"], [4321]),
+            ("Nuxt", ["nuxt", "nuxi"], [3000]),
+            ("Express/Node", ["node", "nodemon", "tsx", "ts-node"], [3000, 3001, 4000, 5000, 8080]),
+        ]
+
+        for (name, needles, ports) in checks {
+            if needles.contains(where: { haystack.contains($0) }) {
+                return name
+            }
+            if ports.contains(port), haystack.contains("node") || haystack.contains("ruby") || haystack.contains("python") {
+                return name
+            }
+        }
+
+        return nil
     }
 }

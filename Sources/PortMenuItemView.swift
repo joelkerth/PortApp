@@ -3,37 +3,87 @@ import AppKit
 final class PortMenuItemView: NSView {
     var onOpen: (() -> Void)?
     var onKill: (() -> Void)?
+    var onFavorite: (() -> Void)?
+    var onIgnore: (() -> Void)?
 
-    static let rowHeight: CGFloat = 30
-    static let menuWidth: CGFloat = 280
+    static let rowHeight: CGFloat = 58
+    static let menuWidth: CGFloat = 520
 
-    private let nameLabel = NSTextField(labelWithString: "")
+    private let titleLabel = NSTextField(labelWithString: "")
+    private let detailLabel = NSTextField(labelWithString: "")
+    private let timeLabel = NSTextField(labelWithString: "")
+    private let favoriteBtn: NSButton
+    private let ignoreBtn: NSButton
     private let openBtn: NSButton
     private let killBtn: NSButton
 
     init(info: PortInfo) {
-        openBtn = Self.iconButton(symbol: "safari",           tint: .systemBlue)
+        favoriteBtn = Self.iconButton(
+            symbol: PortPreferences.isFavorite(info) ? "star.fill" : "star",
+            tint: PortPreferences.isFavorite(info) ? .systemYellow : .secondaryLabelColor
+        )
+        ignoreBtn = Self.iconButton(
+            symbol: PortPreferences.isIgnored(info) ? "eye" : "eye.slash",
+            tint: PortPreferences.isIgnored(info) ? .systemBlue : .secondaryLabelColor
+        )
+        openBtn = Self.iconButton(symbol: "safari", tint: .systemBlue)
         killBtn = Self.iconButton(symbol: "xmark.circle.fill", tint: .systemRed)
         super.init(frame: NSRect(x: 0, y: 0, width: Self.menuWidth, height: Self.rowHeight))
         wantsLayer = true
 
-        nameLabel.stringValue = ":\(info.port)   \(info.processName)"
-        nameLabel.font = .systemFont(ofSize: 13)
-        nameLabel.textColor = .labelColor
-        nameLabel.lineBreakMode = .byTruncatingTail
-        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        let framework = info.framework.map { "  \($0)" } ?? ""
+        titleLabel.stringValue = ":\(info.port)\(framework)  \(info.processName)"
+        titleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        titleLabel.textColor = .labelColor
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        detailLabel.stringValue = info.executablePath.isEmpty ? info.command : info.executablePath
+        detailLabel.toolTip = info.command.isEmpty ? detailLabel.stringValue : info.command
+        detailLabel.font = .systemFont(ofSize: 11)
+        detailLabel.textColor = .secondaryLabelColor
+        detailLabel.lineBreakMode = .byTruncatingMiddle
+        detailLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        timeLabel.stringValue = info.elapsed.isEmpty ? "" : "activo \(info.elapsed)"
+        timeLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+        timeLabel.textColor = .tertiaryLabelColor
+        timeLabel.alignment = .right
+        timeLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        favoriteBtn.action = #selector(didFavorite)
+        favoriteBtn.target = self
+        ignoreBtn.action = #selector(didIgnore)
+        ignoreBtn.target = self
         openBtn.action = #selector(didOpen)
         openBtn.target = self
         killBtn.action = #selector(didKill)
         killBtn.target = self
 
-        [nameLabel, openBtn, killBtn].forEach { addSubview($0) }
+        [titleLabel, detailLabel, timeLabel, favoriteBtn, ignoreBtn, openBtn, killBtn].forEach { addSubview($0) }
 
         NSLayoutConstraint.activate([
-            nameLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            nameLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: openBtn.leadingAnchor, constant: -8),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: favoriteBtn.leadingAnchor, constant: -10),
+            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 9),
+
+            detailLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: timeLabel.leadingAnchor, constant: -10),
+            detailLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+
+            timeLabel.trailingAnchor.constraint(equalTo: favoriteBtn.leadingAnchor, constant: -10),
+            timeLabel.centerYAnchor.constraint(equalTo: detailLabel.centerYAnchor),
+            timeLabel.widthAnchor.constraint(equalToConstant: 88),
+
+            favoriteBtn.trailingAnchor.constraint(equalTo: ignoreBtn.leadingAnchor, constant: -8),
+            favoriteBtn.centerYAnchor.constraint(equalTo: centerYAnchor),
+            favoriteBtn.widthAnchor.constraint(equalToConstant: 20),
+            favoriteBtn.heightAnchor.constraint(equalToConstant: 20),
+
+            ignoreBtn.trailingAnchor.constraint(equalTo: openBtn.leadingAnchor, constant: -8),
+            ignoreBtn.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ignoreBtn.widthAnchor.constraint(equalToConstant: 20),
+            ignoreBtn.heightAnchor.constraint(equalToConstant: 20),
 
             openBtn.trailingAnchor.constraint(equalTo: killBtn.leadingAnchor, constant: -8),
             openBtn.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -68,6 +118,8 @@ final class PortMenuItemView: NSView {
 
     // MARK: – Actions
 
+    @objc private func didFavorite() { onFavorite?() }
+    @objc private func didIgnore() { onIgnore?() }
     @objc private func didOpen() { onOpen?() }
     @objc private func didKill() { onKill?() }
 
