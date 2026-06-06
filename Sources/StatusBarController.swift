@@ -8,6 +8,11 @@ class StatusBarController {
     private let settings = SettingsWindowController()
     private var searchText = ""
     private var filter: PortFilter = .active
+    private var currentPorts: [PortInfo] = []
+    private var rowItems: [(item: NSMenuItem, info: PortInfo)] = []
+    private weak var countItem: NSMenuItem?
+    private weak var emptyItem: NSMenuItem?
+    private weak var rowSeparatorItem: NSMenuItem?
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -62,9 +67,10 @@ class StatusBarController {
 
     private func rebuildMenu() {
         menu.removeAllItems()
+        rowItems.removeAll()
 
         let ports = PortScanner.scan()
-        let visiblePorts = filtered(ports)
+        currentPorts = ports
 
         // Update badge inline so it's instant when the menu opens
         statusItem.button?.image = Self.makeStatusIcon(hasPorts: ports.contains { !PortPreferences.isIgnored($0) })
@@ -73,43 +79,48 @@ class StatusBarController {
         let headerView = PortFilterHeaderView(searchText: searchText, filter: filter)
         headerView.onSearch = { [weak self] text in
             self?.searchText = text
-            self?.rebuildMenu()
+            self?.applyCurrentFilter()
         }
         headerView.onFilter = { [weak self] filter in
             self?.filter = filter
-            self?.rebuildMenu()
+            self?.applyCurrentFilter()
         }
         headerItem.view = headerView
         menu.addItem(headerItem)
 
-        if visiblePorts.isEmpty {
-            let title = ports.isEmpty ? "No hay puertos activos" : "No hay resultados para este filtro"
-            let empty = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-            empty.isEnabled = false
-            menu.addItem(empty)
-        } else {
-            let header = NSMenuItem(title: headerTitle(total: ports.count, visible: visiblePorts.count), action: nil, keyEquivalent: "")
-            header.isEnabled = false
-            menu.addItem(header)
-            menu.addItem(.separator())
+        let empty = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        empty.isEnabled = false
+        emptyItem = empty
+        menu.addItem(empty)
 
-            for info in visiblePorts {
-                let item = NSMenuItem()
-                let row = PortMenuItemView(info: info)
-                row.onOpen = { [weak self] in self?.openPort(info.port) }
-                row.onKill = { [weak self] in self?.killPort(info) }
-                row.onFavorite = { [weak self] in
-                    PortPreferences.toggleFavorite(info)
-                    self?.rebuildMenu()
-                }
-                row.onIgnore = { [weak self] in
-                    PortPreferences.toggleIgnored(info)
-                    self?.rebuildMenu()
-                }
-                item.view = row
-                menu.addItem(item)
+        let count = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        count.isEnabled = false
+        countItem = count
+        menu.addItem(count)
+
+        let separator = NSMenuItem.separator()
+        rowSeparatorItem = separator
+        menu.addItem(separator)
+
+        for info in ports {
+            let item = NSMenuItem()
+            let row = PortMenuItemView(info: info)
+            row.onOpen = { [weak self] in self?.openPort(info.port) }
+            row.onKill = { [weak self] in self?.killPort(info) }
+            row.onFavorite = { [weak self] in
+                PortPreferences.toggleFavorite(info)
+                self?.rebuildMenu()
             }
+            row.onIgnore = { [weak self] in
+                PortPreferences.toggleIgnored(info)
+                self?.rebuildMenu()
+            }
+            item.view = row
+            rowItems.append((item, info))
+            menu.addItem(item)
         }
+
+        applyCurrentFilter()
 
         // Footer row: settings | refresh | quit
         let footerItem = NSMenuItem()
@@ -155,6 +166,22 @@ class StatusBarController {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !query.isEmpty else { return base }
         return base.filter { $0.searchableText.contains(query) }
+    }
+
+    private func applyCurrentFilter() {
+        let visibleIDs = Set(filtered(currentPorts).map(\.id))
+        let visibleCount = rowItems.reduce(0) { count, row in
+            let isVisible = visibleIDs.contains(row.info.id)
+            row.item.isHidden = !isVisible
+            return count + (isVisible ? 1 : 0)
+        }
+
+        let hasRows = visibleCount > 0
+        emptyItem?.isHidden = hasRows
+        emptyItem?.title = currentPorts.isEmpty ? "No hay puertos activos" : "No hay resultados para este filtro"
+        countItem?.isHidden = !hasRows
+        countItem?.title = headerTitle(total: currentPorts.count, visible: visibleCount)
+        rowSeparatorItem?.isHidden = !hasRows
     }
 
     private func headerTitle(total: Int, visible: Int) -> String {
