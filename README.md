@@ -90,15 +90,20 @@ Luego se puede abrir con:
 open /Applications/PortMonitor.app
 ```
 
-## Crear un paquete descargable
+## Crear paquetes descargables
 
-Para generar un ZIP local con `PortMonitor.app`:
+Para generar un ZIP y un DMG local con `PortMonitor.app`:
 
 ```sh
 bash package_release.sh v1.0.0
 ```
 
-El archivo queda en `dist/PortMonitor-v1.0.0-macOS.zip`.
+Los archivos quedan en:
+
+```text
+dist/PortMonitor-v1.0.0-macOS.zip
+dist/PortMonitor-v1.0.0-macOS.dmg
+```
 
 ## Publicar un release en GitHub
 
@@ -111,7 +116,7 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-GitHub Actions compila la app en macOS, genera el ZIP y lo adjunta al release.
+GitHub Actions compila la app en macOS, genera el ZIP y el DMG, y los adjunta al release.
 
 ## Generar el icono
 
